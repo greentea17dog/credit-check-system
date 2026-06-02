@@ -5,12 +5,15 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 正確指向專案中的資料庫位置 (向上跳一層到根目錄，再進到 db/database)
-DB_PATH = os.path.abspath(os.path.join(current_dir, "..", "db", "database", "curriculum.db"))
+DB_PATH = os.path.abspath(
+    os.path.join(current_dir, "..", "db", "database", "curriculum.db")
+)
+
 
 def analyze_general(session_data, dept_name, year):
     if hasattr(session_data, "dict"):
         session_data = session_data.dict()
-    elif hasattr(session_data, "model_dump"): # 支援 Pydantic v2
+    elif hasattr(session_data, "model_dump"):  # 支援 Pydantic v2
         session_data = session_data.model_dump()
 
     # 2. 處理 NCCU 匯出的 List 格式
@@ -33,18 +36,23 @@ def analyze_general(session_data, dept_name, year):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     # 根據系名與入學年搜尋門檻 (例如: 資科系 111)
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT ger.total_required, ger.compulsory_lang, ger.min_humanities,
                ger.min_social, ger.min_natural
         FROM general_education_requirements ger
         JOIN departments d ON ger.department_id = d.id
         WHERE d.dept_name LIKE ? AND d.applicable_year = ?
-    """, (f"{dept_name}%", year))
+    """,
+        (f"{dept_name}%", year),
+    )
 
     threshold = cursor.fetchone()
 
     # 門檻預設值 (避免查不到時程式崩潰)
-    req_total, req_lang, req_hum, req_soc, req_nat = (threshold if threshold else (28, 12, 3, 3, 3))
+    req_total, req_lang, req_hum, req_soc, req_nat = (
+        threshold if threshold else (28, 12, 3, 3, 3)
+    )
 
     # --- 2. 初始化統計學分 ---
     humanities = 0
@@ -94,27 +102,35 @@ def analyze_general(session_data, dept_name, year):
 
             # 修正：優先使用課號 (courseCode) 進行精確查詢，以區分同名但不同身分 (核通/一般通) 的課程
             course_code = course.get("courseCode", "")
-            cursor.execute("SELECT type, is_core FROM general_courses WHERE code = ?", (course_code,))
+            cursor.execute(
+                "SELECT type, is_core FROM general_courses WHERE code = ?",
+                (course_code,),
+            )
             db_row = cursor.fetchone()
-            
+
             # 如果用課號查不到，再降級使用課名查詢 (避免舊資料缺課號)
             if not db_row:
-                cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+                cursor.execute(
+                    "SELECT type, is_core FROM general_courses WHERE course_name = ?",
+                    (course_name,),
+                )
                 db_row = cursor.fetchone()
 
             # 判斷是否為核心通識
             db_type = db_row[0] if db_row else ""
             # 修正原代碼變數命名衝突：將資料庫讀取的值存為 db_is_core
-            db_is_core = (str(db_row[1]).lower() == 'yes') if db_row else False
+            db_is_core = (str(db_row[1]).lower() == "yes") if db_row else False
 
             # 檢查是否為資訊通識（資科系可計入0-3學分）
             if is_info_dept and ("資訊通" in remark or db_type == "資訊"):
-                info_literacy_courses.append({
-                    "courseCode": course.get("courseCode", ""),
-                    "courseName": course_name,
-                    "credits": credit,
-                    "category": "資訊通識",
-                })
+                info_literacy_courses.append(
+                    {
+                        "courseCode": course.get("courseCode", ""),
+                        "courseName": course_name,
+                        "credits": credit,
+                        "category": "資訊通識",
+                    }
+                )
                 info_literacy += credit
                 continue  # 資科系修資訊通識，計入資訊通識學分
 
@@ -130,15 +146,17 @@ def analyze_general(session_data, dept_name, year):
                     natural_sciences += credit
                     core_domains_taken.add("自然")
                 if db_type in ("人文", "社會", "自然"):
-                    core_courses.append({
-                        "courseCode": course.get("courseCode", ""),
-                        "courseName": course_name,
-                        "credits": credit,
-                        "category": db_type,
-                        "source": "regular",
-                    })
+                    core_courses.append(
+                        {
+                            "courseCode": course.get("courseCode", ""),
+                            "courseName": course_name,
+                            "credits": credit,
+                            "category": db_type,
+                            "source": "regular",
+                        }
+                    )
                 # 如果有其他核心類別可在這裡擴充
-                continue # 已處理完核心通識，跳過後面的非核心判斷
+                continue  # 已處理完核心通識，跳過後面的非核心判斷
 
             if course_name.startswith("大學英文"):
                 english += credit
@@ -160,7 +178,9 @@ def analyze_general(session_data, dept_name, year):
 
             else:
                 course_code = course.get("courseCode", "")
-                cursor.execute("SELECT type FROM general_courses WHERE code = ?", (course_code,))
+                cursor.execute(
+                    "SELECT type FROM general_courses WHERE code = ?", (course_code,)
+                )
                 code_row = cursor.fetchone()
 
                 if code_row:
@@ -179,30 +199,37 @@ def analyze_general(session_data, dept_name, year):
         credit = float(course.get("credit", 0))
         course_name = course.get("courseName", "")
         course_code = course.get("courseCode", "")
-        remark = course.get("remark", "") # 抵免資料若有備註也可利用
+        remark = course.get("remark", "")  # 抵免資料若有備註也可利用
 
         print(f"處理抵免課程: {course_code} {course_name}, 學分: {credit}")
 
         # 優先查詢資料庫判斷類別與核心通識 (修正為課號優先)
-        cursor.execute("SELECT type, is_core FROM general_courses WHERE code = ?", (course_code,))
+        cursor.execute(
+            "SELECT type, is_core FROM general_courses WHERE code = ?", (course_code,)
+        )
         db_row = cursor.fetchone()
-        
+
         if not db_row:
-            cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+            cursor.execute(
+                "SELECT type, is_core FROM general_courses WHERE course_name = ?",
+                (course_name,),
+            )
             db_row = cursor.fetchone()
 
         db_type = db_row[0] if db_row else ""
-        db_is_core = (str(db_row[1]).lower() == 'yes') if db_row else False
+        db_is_core = (str(db_row[1]).lower() == "yes") if db_row else False
 
         # --- 邏輯 A：資訊通識 (資科系專用) ---
         if is_info_dept and ("資訊通" in remark or db_type == "資訊"):
-            info_literacy_courses.append({
-                "courseCode": course_code,
-                "courseName": course_name,
-                "credits": credit,
-                "category": "資訊通識",
-                "source": "waived",
-            })
+            info_literacy_courses.append(
+                {
+                    "courseCode": course_code,
+                    "courseName": course_name,
+                    "credits": credit,
+                    "category": "資訊通識",
+                    "source": "waived",
+                }
+            )
             info_literacy += credit
             continue
 
@@ -218,13 +245,15 @@ def analyze_general(session_data, dept_name, year):
                 natural_sciences += credit
                 core_domains_taken.add("自然")
             if db_type in ("人文", "社會", "自然"):
-                core_courses.append({
-                    "courseCode": course_code,
-                    "courseName": course_name,
-                    "credits": credit,
-                    "category": db_type,
-                    "source": "waived",
-                })
+                core_courses.append(
+                    {
+                        "courseCode": course_code,
+                        "courseName": course_name,
+                        "credits": credit,
+                        "category": db_type,
+                        "source": "waived",
+                    }
+                )
             continue
 
         # --- 邏輯 B：語文通識 ---
@@ -253,7 +282,9 @@ def analyze_general(session_data, dept_name, year):
                 target_type = db_type
             else:
                 # 若資料庫查無此課程名稱，嘗試用課號查詢
-                cursor.execute("SELECT type FROM general_courses WHERE code = ?", (course_code,))
+                cursor.execute(
+                    "SELECT type FROM general_courses WHERE code = ?", (course_code,)
+                )
                 code_row = cursor.fetchone()
                 target_type = code_row[0] if code_row else ""
 
@@ -273,11 +304,11 @@ def analyze_general(session_data, dept_name, year):
             credit = float(course.get("credit", 0))
             remark = course.get("remark", "")
 
-            # 關鍵修正點：在這裡定義 score_raw
+            # 在這裡定義 score_raw
             score_raw = course.get("score", "")
             course_name = course.get("courseName", "")
 
-            # 修正：碩班資料會有 "成績未到或無成績"，需安全轉換
+            # 碩班資料會有 "成績未到或無成績"，需安全轉換
             try:
                 score = float(score_raw)
                 if score < 60:
@@ -290,7 +321,7 @@ def analyze_general(session_data, dept_name, year):
             current_credits = {
                 "人文": humanities,
                 "社會": social_sciences,
-                "自然": natural_sciences
+                "自然": natural_sciences,
             }
             MAX_VAL = 7.0
 
@@ -309,7 +340,11 @@ def analyze_general(session_data, dept_name, year):
                 # 按照「目前最低分」的領域優先填補，直到該領域滿 8 或學分用完
                 while remaining_credit > 0:
                     # 找出還沒滿 8 分的相關領域
-                    incomplete_fields = [f for f in possible_fields if f in current_credits and current_credits[f] < MAX_VAL]
+                    incomplete_fields = [
+                        f
+                        for f in possible_fields
+                        if f in current_credits and current_credits[f] < MAX_VAL
+                    ]
 
                     if not incomplete_fields:
                         # 如果通通都滿 8 分了，剩下的學分不再計入這三個領域
@@ -318,7 +353,9 @@ def analyze_general(session_data, dept_name, year):
                         break
 
                     # 挑選目前學分最少的領域來補
-                    target_field = min(incomplete_fields, key=lambda f: current_credits[f])
+                    target_field = min(
+                        incomplete_fields, key=lambda f: current_credits[f]
+                    )
 
                     # 計算該領域還差多少才滿 8
                     gap = MAX_VAL - current_credits[target_field]
@@ -341,13 +378,17 @@ def analyze_general(session_data, dept_name, year):
         course_code = course.get("courseCode", "")
 
         # 1. 從資料庫取得該課號的 type
-        cursor.execute("SELECT type FROM general_courses WHERE code = ?", (course_code,))
+        cursor.execute(
+            "SELECT type FROM general_courses WHERE code = ?", (course_code,)
+        )
         db_row = cursor.fetchone()
         db_type = db_row[0] if db_row else ""
 
         # 2. 判斷是否為跨領域 (字串中包含 "、")
         if "、" in db_type:
-            print(f"處理跨領域抵免: {course_code} {course_name}, 類別: {db_type}, 學分: {credit}")
+            print(
+                f"處理跨領域抵免: {course_code} {course_name}, 類別: {db_type}, 學分: {credit}"
+            )
 
             # 提取領域列表，例如 ["人文", "社會"]
             possible_fields = [f.strip() for f in db_type.split("、")]
@@ -356,7 +397,7 @@ def analyze_general(session_data, dept_name, year):
             current_credits = {
                 "人文": humanities,
                 "社會": social_sciences,
-                "自然": natural_sciences
+                "自然": natural_sciences,
             }
             MAX_VAL = 7.0
             remaining_credit = credit
@@ -364,7 +405,11 @@ def analyze_general(session_data, dept_name, year):
             # 3. 循環分配邏輯：優先填補學分最低的領域
             while remaining_credit > 0:
                 # 僅考慮此課程涵蓋、且尚未達標 (8學分) 的領域
-                incomplete_fields = [f for f in possible_fields if f in current_credits and current_credits[f] < MAX_VAL]
+                incomplete_fields = [
+                    f
+                    for f in possible_fields
+                    if f in current_credits and current_credits[f] < MAX_VAL
+                ]
 
                 if not incomplete_fields:
                     # 所有對應領域都已滿 8 學分，剩餘學分跳出（或依需求計入超修）
@@ -408,8 +453,15 @@ def analyze_general(session_data, dept_name, year):
     counted_info_literacy = min(info_literacy, MAX_INFO_LITERACY) if is_info_dept else 0
 
     # 加總後再套用總上限 28
-    total_earned_raw = (counted_chinese + counted_english + counted_humanities +
-                       counted_social + counted_natural + counted_college + counted_info_literacy)
+    total_earned_raw = (
+        counted_chinese
+        + counted_english
+        + counted_humanities
+        + counted_social
+        + counted_natural
+        + counted_college
+        + counted_info_literacy
+    )
     total_earned = min(total_earned_raw, TOTAL_REQUIRED)
 
     # 收集違規／不足項目（供前端顯示）
@@ -433,13 +485,15 @@ def analyze_general(session_data, dept_name, year):
         violations.append(f"通識總學分不足（{total_earned_raw}/{TOTAL_REQUIRED} 學分）")
 
     # 判定是否合格
-    passed = (total_earned >= TOTAL_REQUIRED and
-              counted_chinese >= MIN_CHINESE and
-              counted_english >= MIN_ENGLISH and
-              counted_humanities >= MIN_DOMAIN and
-              counted_social >= MIN_DOMAIN and
-              counted_natural >= MIN_DOMAIN and
-              len(core_domains_taken) >= CORE_REQUIRED)
+    passed = (
+        total_earned >= TOTAL_REQUIRED
+        and counted_chinese >= MIN_CHINESE
+        and counted_english >= MIN_ENGLISH
+        and counted_humanities >= MIN_DOMAIN
+        and counted_social >= MIN_DOMAIN
+        and counted_natural >= MIN_DOMAIN
+        and len(core_domains_taken) >= CORE_REQUIRED
+    )
 
     # --- 6. 收集已修通識課程（僅供前端展示，不影響上方計分） ---
     def _classify(course_name: str, course_code: str, remark: str) -> str:
@@ -463,15 +517,19 @@ def analyze_general(session_data, dept_name, year):
         # 資訊通識
         if remark == "資訊通":
             return "資訊通識"
-        
+
         # 查資料庫 (修正為優先比對課號)
-        cursor.execute("SELECT type FROM general_courses WHERE code = ?", (course_code,))
+        cursor.execute(
+            "SELECT type FROM general_courses WHERE code = ?", (course_code,)
+        )
         row = cursor.fetchone()
-        
+
         if not row:
-            cursor.execute("SELECT type FROM general_courses WHERE course_name = ?", (course_name,))
+            cursor.execute(
+                "SELECT type FROM general_courses WHERE course_name = ?", (course_name,)
+            )
             row = cursor.fetchone()
-            
+
         if row and row[0]:
             db_type = row[0]
             # 如果資料庫顯示為資訊相關類型，回傳資訊通識
@@ -510,13 +568,15 @@ def analyze_general(session_data, dept_name, year):
             if key in seen:
                 continue
             seen.add(key)
-            taken_courses.append({
-                "courseCode": code,
-                "courseName": name,
-                "credits": course.get("credit", "0.0"),
-                "category": cat,
-                "source": "regular",
-            })
+            taken_courses.append(
+                {
+                    "courseCode": code,
+                    "courseName": name,
+                    "credits": course.get("credit", "0.0"),
+                    "category": cat,
+                    "source": "regular",
+                }
+            )
     # 抵免
     for course in waived_data:
         name = course.get("courseName", "")
@@ -528,13 +588,15 @@ def analyze_general(session_data, dept_name, year):
         if key in seen:
             continue
         seen.add(key)
-        taken_courses.append({
-            "courseCode": code,
-            "courseName": name,
-            "credits": course.get("credit", "0.0"),
-            "category": cat,
-            "source": "waived",
-        })
+        taken_courses.append(
+            {
+                "courseCode": code,
+                "courseName": name,
+                "credits": course.get("credit", "0.0"),
+                "category": cat,
+                "source": "waived",
+            }
+        )
 
     conn.close()
 
