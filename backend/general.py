@@ -92,8 +92,15 @@ def analyze_general(session_data, dept_name, year):
                 # 如果是「成績未到」，在畢業判定中通常不計入
                 continue
 
-            cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+            # 修正：優先使用課號 (courseCode) 進行精確查詢，以區分同名但不同身分 (核通/一般通) 的課程
+            course_code = course.get("courseCode", "")
+            cursor.execute("SELECT type, is_core FROM general_courses WHERE code = ?", (course_code,))
             db_row = cursor.fetchone()
+            
+            # 如果用課號查不到，再降級使用課名查詢 (避免舊資料缺課號)
+            if not db_row:
+                cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+                db_row = cursor.fetchone()
 
             # 判斷是否為核心通識
             db_type = db_row[0] if db_row else ""
@@ -176,9 +183,13 @@ def analyze_general(session_data, dept_name, year):
 
         print(f"處理抵免課程: {course_code} {course_name}, 學分: {credit}")
 
-        # 優先查詢資料庫判斷類別與核心通識
-        cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+        # 優先查詢資料庫判斷類別與核心通識 (修正為課號優先)
+        cursor.execute("SELECT type, is_core FROM general_courses WHERE code = ?", (course_code,))
         db_row = cursor.fetchone()
+        
+        if not db_row:
+            cursor.execute("SELECT type, is_core FROM general_courses WHERE course_name = ?", (course_name,))
+            db_row = cursor.fetchone()
 
         db_type = db_row[0] if db_row else ""
         db_is_core = (str(db_row[1]).lower() == 'yes') if db_row else False
@@ -452,10 +463,15 @@ def analyze_general(session_data, dept_name, year):
         # 資訊通識
         if remark == "資訊通":
             return "資訊通識"
-        # 查資料庫
-        cursor.execute("SELECT type FROM general_courses WHERE course_name = ? OR code = ?",
-                       (course_name, course_code))
+        
+        # 查資料庫 (修正為優先比對課號)
+        cursor.execute("SELECT type FROM general_courses WHERE code = ?", (course_code,))
         row = cursor.fetchone()
+        
+        if not row:
+            cursor.execute("SELECT type FROM general_courses WHERE course_name = ?", (course_name,))
+            row = cursor.fetchone()
+            
         if row and row[0]:
             db_type = row[0]
             # 如果資料庫顯示為資訊相關類型，回傳資訊通識

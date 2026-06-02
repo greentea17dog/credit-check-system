@@ -3,7 +3,10 @@ import sqlite3
 import os
 
 # 1. 設定路徑與檔案
-folder_path = "../data/通識"
+# 透過程式所在檔案的絕對路徑來反推
+current_dir = os.path.dirname(os.path.abspath(__file__))
+folder_path = os.path.join(current_dir, "..", "data", "通識")
+
 files = [
     "1101通識.xlsx", "1102通識.xlsx", "1111通識.xlsx", "1112通識.xlsx", 
     "1121通識.xlsx", "1122通識.xlsx", "1131通識.xlsx", "1132通識.xlsx", 
@@ -43,29 +46,7 @@ for f in files:
     else:
         print(f"找不到檔案：{full_path}")
 
-# 3. 準備手動新增的核心通識資料
-manual_categories = [
-    {"courses": ["藝術欣賞與創作", "西方文學經典與人文思維", "生命價值與哲學思惟", "生命探索與宗教文化",
-                "文明發展與歷史思惟", "語言的人文與科學", "近代臺灣歷史與人物"], "type": "人文"},
-    {"courses": ["臺灣政治", "法學素養", "生活中的經濟學", "媒體素養", "社會學動動腦", "教育探索與自我學習",
-                "環視全球-挑戰國際視野", "中國大陸概論"], "type": "社會"},
-    {"courses": ["數學、邏輯與人生", "生活中的律動", "物理學史與人類文明", "生活中的生命科學", 
-                "心理與生活", "大腦與我", "科技與人文社會"], "type": "自然"}
-]
-
-manual_rows = []
-for entry in manual_categories:
-    for course in entry["courses"]:
-        manual_rows.append({
-            'semester': None,
-            'code': None, 
-            'course_name': course,
-            'credit': '3',
-            'type': entry["type"],
-            'is_core': 'Yes'
-        })
-df_manual = pd.DataFrame(manual_rows)
-
+# 3. 手動新增的核心通識資料(直接寫入通識xlsx，這裡就不再重複新增)
 # 4. 整合與清洗
 if all_data:
     combined_df = pd.concat(all_data, ignore_index=True)
@@ -81,8 +62,8 @@ if all_data:
     # 過濾欄位
     combined_df = combined_df[target_columns]
 
-    # 合併 Excel 與 手動資料
-    final_df = pd.concat([combined_df, df_manual], ignore_index=True)
+    # 【配合組員決策】：直接使用 Excel 合併後的資料，不再 concat 手動資料
+    final_df = combined_df.copy()
     
     # 【關鍵修正】
     # 1. 將 'semester' 加入重複判斷，這樣 1141 的課跟 1142 的課都會保留
