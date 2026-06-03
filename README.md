@@ -1,114 +1,127 @@
-# 畢業審判官 — 畢業學分檢核系統
+# 畢業審判官 — 政大畢業學分檢核系統
 
-針對政大學生設計，解析全人系統成績單 JSON，自動比對必修、通識、選修、體育學分規則，回報是否符合畢業資格。支援一般生與雙主修／輔系生兩種身分。
+🎓 專為國立政治大學學生設計的畢業學分檢核系統，自動解析全人系統成績單 JSON，比對必修、通識、選修、體育學分規則，即時回報畢業資格。支援一般生、雙主修、輔系等多種學習路徑。
 
----
+## ✨ 核心功能
 
-## 目錄結構
+- 📊 **智能學分分析** — 自動解析全人系統成績單，精確計算各類學分
+- 🎯 **畢業資格判定** — 即時回報是否符合畢業條件，缺漏課程一目了然
+- 🔄 **多身份支援** — 一般生、雙主修、輔系生專用分析邏輯
+- 📱 **現代化介面** — Next.js + Tailwind CSS 打造直觀操作體驗
+- ⚡ **即時回饋** - 上傳即分析，無需等待
+
+## 🏗️ 技術架構
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │    Backend      │    │   Database      │
+│   Next.js 16    │◄──►│   FastAPI       │◄──►│   SQLite        │
+│   React 19      │    │   Python 3.10+  │    │   curriculum.db │
+│   Tailwind CSS  │    │   Uvicorn       │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+## 📁 專案結構
 
 ```
 credit-check-system/
-├── backend/
-│   ├── main.py           ← FastAPI 主程式（API 路由與回應整合）
-│   ├── database.py       ← SQLite 連線設定
-│   ├── required.py       ← 必修學分分析
-│   ├── general.py        ← 通識學分分析
-│   ├── pe_elective.py    ← 體育／選修學分分析
-│   ├── waiver.py         ← 抵免課程分析
-│   └── minor.py          ← 輔系學分分析（所有系所）
-├── db/
-│   ├── data/
-│   │   ├── 通識/         ← 各學期通識課程 xlsx 原始資料
-│   │   └── 輔系/         ← 各輔系必修 PDF／JSON
-│   └── database/
-│       ├── schema.sql        ← 資料表定義
-│       ├── init_db.py        ← 建立資料庫
-│       ├── seed_db.py        ← 匯入必修課程資料
-│       ├── seed_general.py   ← 匯入通識門檻資料
-│       ├── seed_general_course.py ← 匯入通識課程清單
-│       └── curriculum.db     ← SQLite 資料庫（不 commit）
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx          ← 上傳主頁面（Next.js）
-│   │   └── api/v1/analyze/   ← Mock API（開發測試用）
-│   ├── hooks/useErrorHandler.ts  ← API 呼叫 + 錯誤處理
-│   └── components/
-│       ├── GraduationResult.tsx  ← 審查結果顯示元件
-│       └── ErrorMessage.tsx      ← 錯誤訊息元件
-├── tests/
-│   ├── test_api.py           ← GET 端點測試
-│   ├── test_upload.py        ← POST /api/v1/analyze 測試
-│   ├── test_database.py      ← 資料庫函數測試
-│   ├── required_double_test.py ← 雙主修必修測試
-│   ├── conftest.py           ← temp_db fixture
-│   └── test_data/            ← 測試用假資料
-├── pyproject.toml        ← Python 套件設定（uv 管理）
-├── .env                  ← 本地環境變數（不 commit，請複製 .env.example）
-└── .env.example          ← 環境變數範本（commit 追蹤）
+├── 🐍 backend/                 # Python 後端服務
+│   ├── main.py                # FastAPI 主應用程式
+│   ├── database.py            # SQLite 資料庫連線
+│   ├── required.py            # 必修學分分析模組
+│   ├── general.py             # 通識學分分析模組  
+│   ├── pe_elective.py         # 體育/選修學分分析
+│   ├── waiver.py              # 抵免課程分析
+│   └── minor.py               # 輔系學分分析
+├── 🗄️ db/                     # 資料庫相關
+│   ├── data/                  # 原始資料檔案
+│   └── database/              # 資料庫初始化腳本
+├── ⚛️ frontend/               # React 前端應用
+│   ├── app/                   # Next.js App Router
+│   ├── components/            # React 元件庫
+│   └── hooks/                 # 自定義 Hooks
+├── 🧪 tests/                  # 測試檔案
+├── 📋 pyproject.toml          # Python 專案設定
+├── 📋 package.json            # Node.js 專案設定
+└── 🚀 dev.sh                  # 開發環境啟動腳本
 ```
 
----
+## 🚀 快速開始
 
-## 快速啟動
+### 📋 前置需求
 
-> Python 套件使用 [uv](https://docs.astral.sh/uv/) 管理，前端使用 pnpm。
+- **Python 3.10+** 與 **uv** 套件管理器
+- **Node.js 18+** 與 **pnpm** 套件管理器
 
-### 後端
+### 🛠️ 一鍵啟動（推薦）
 
 ```bash
-# 安裝依賴（首次）
+# 克隆專案
+git clone <repository-url>
+cd credit-check-system
+
+# 一鍵啟動前後端服務
+bash dev.sh
+```
+
+服務將自動啟動：
+- 🐍 **Backend** → http://localhost:8000
+- ⚛️ **Frontend** → http://localhost:3000
+
+### 🔧 手動啟動
+
+**後端服務**
+```bash
+# 安裝 Python 依賴
 uv sync
 
-# 啟動 FastAPI（含熱重載）
-uv run uvicorn backend.main:app --reload
-# → http://127.0.0.1:8000
+# 啟動 FastAPI 服務
+uv run uvicorn backend.main:app --reload --port 8000
 ```
 
-`.env` 設定（放根目錄，不 commit）：
+**前端服務**
 ```bash
-cp .env.example .env
-# 依需要修改後使用
+cd frontend
+pnpm install
+pnpm dev --port 3000
 ```
 
-`.env.example`（預設值）：
-```
+### ⚙️ 環境設定
+
+```bash
+# 複製環境變數範本
+cp .env.example .env
+
+# 預設設定（通常無需修改）
 DB_PATH=db/database/curriculum.db
 ```
 
-### 前端
+## 📡 API 文件
 
-```bash
-cd frontend
-pnpm install   # 首次安裝
-pnpm dev
-# → http://localhost:3000
-```
+### 主要端點
 
-前端會直接呼叫 `http://127.0.0.1:8000/api/v1/analyze`，請確認後端已啟動。
-
----
-
-## API 端點
-
-| 方法 | 路徑 | 功能 |
+| 方法 | 路徑 | 描述 |
 |------|------|------|
-| GET | `/` | 健康檢查 |
-| GET | `/departments` | 查所有系所清單 |
-| GET | `/departments/{dept_name}/courses?year=114` | 查指定系所必修課程 |
-| POST | `/api/v1/analyze` | 接收全人 JSON，回傳完整畢業分析結果 |
+| `GET` | `/` | 服務健康檢查 |
+| `GET` | `/departments` | 獲取所有系所清單 |
+| `GET` | `/departments/{dept_name}/courses?year=114` | 查詢指定系所必修課程 |
+| `POST` | `/api/v1/analyze` | **核心功能** - 畢業學分分析 |
 
-### POST /api/v1/analyze
+### 🔍 分析請求格式
 
-**請求格式：**
 ```json
 {
   "role": "general",
   "data": [ ...全人系統匯出的 JSON 陣列... ]
 }
 ```
-`role` 可為 `"general"`（一般生）或 `"dual"`（雙主修／輔系生）。
 
-**回應格式：**
+**身份參數說明：**
+- `"general"` — 一般生
+- `"dual"` — 雙主修／輔系生
+
+### 📊 分析回應格式
+
 ```json
 {
   "dept_name": "資訊科學系",
@@ -125,8 +138,8 @@ pnpm dev
     "elective_credits_needed": 24
   },
   "required_courses": {
-    "passed": ["計算機概論", "資料結構", "..."],
-    "missing": ["作業系統", "..."]
+    "passed": ["計算機概論", "資料結構"],
+    "missing": ["作業系統", "演算法"]
   },
   "general_education": {
     "credits_earned": 20,
@@ -157,106 +170,92 @@ pnpm dev
 }
 ```
 
----
+## 🗄️ 資料庫架構
 
-## 資料庫說明
+### 核心資料表
 
-### 資料表
-
-| 資料表 | 說明 |
+| 資料表 | 用途 |
 |--------|------|
-| `departments` | 系所基本資訊（系名、學年、最低畢業學分、必修學分要求） |
-| `required_courses` | 各系各年度必修課程清單 |
-| `course_schedules` | 每門課開課學期（Y1S1 ～ Y4S2，與 required_courses 1對1） |
-| `special_rules` | 各系修課特殊規定 |
-| `general_education_requirements` | 各系通識門檻（總學分、語言通識、人文／社會／自然最低要求） |
-| `general_courses` | 通識課程清單（課號、課名、領域、是否核通） |
-| `minor_departments` | 各輔系必修／選修課程結構（JSON 欄位，由 seed_minor_db.py 填入） |
+| `departments` | 系所基本資訊與畢業門檻 |
+| `required_courses` | 各系年度必修課程清單 |
+| `course_schedules` | 課程建議開課學期 |
+| `general_education_requirements` | 通識學分門檻設定 |
+| `general_courses` | 通識課程分類資料 |
+| `minor_departments` | 輔系課程結構 |
 
-### 初始化資料庫（首次或重建時）
+### 🛠️ 資料庫初始化
 
 ```bash
+# 首次設定或重建資料庫
 python db/database/init_db.py              # 建立資料表
 python db/database/seed_db.py              # 匯入必修課程
 python db/database/seed_general.py         # 匯入通識門檻
-python db/database/seed_general_course.py  # 匯入通識課程清單
-python db/database/seed_minor_db.py        # 匯入輔系課程資料
+python db/database/seed_general_course.py  # 匯入通識課程
+python db/database/seed_minor_db.py        # 匯入輔系資料
 ```
 
-### 終端機查詢
+### 🔍 資料查詢
 
 ```bash
+# 進入 SQLite 終端機
 sqlite3 db/database/curriculum.db
 ```
+
 ```sql
-.tables
-.schema departments
+-- 查詢所有系所
+SELECT dept_name, applicable_year FROM departments ORDER BY applicable_year DESC;
 
--- 查有哪些系所與學年
-SELECT id, dept_name, applicable_year FROM departments ORDER BY applicable_year DESC LIMIT 20;
-
--- 查某系某年度的必修課
+-- 查詢特定系所必修課程
 SELECT rc.name, rc.credits, rc.suggested_year
 FROM required_courses rc
 JOIN departments d ON rc.department_id = d.id
 WHERE d.dept_name LIKE '資訊%' AND d.applicable_year = '114'
-ORDER BY rc.suggested_year, rc.name;
+ORDER BY rc.suggested_year;
 ```
 
----
-
-## 執行測試
+## 🧪 測試
 
 ```bash
+# 安裝測試依賴
 uv sync --all-groups
+
+# 執行所有測試
 uv run pytest tests/ -v
+
+# 執行特定測試
+uv run pytest tests/test_upload.py -v
 ```
 
----
+## 🚀 部署
 
-## CI/CD 本地 Runner 設定
+### 環境變數
 
-GitLab 免費帳號的 shared runner 配額有限。**每位成員**需在自己的電腦設定本地 runner，各自產生獨立的 token（token 與機器綁定，不共用）。
-
-### 安裝
-
-**macOS**
-```bash
-brew install gitlab-runner
-```
-
-**Linux**
-```bash
-sudo curl -L --output /usr/local/bin/gitlab-runner \
-  https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64
-sudo chmod +x /usr/local/bin/gitlab-runner
-sudo gitlab-runner install
-```
-
-### 取得 Token（每人各自操作）
-
-到 GitLab 專案 **Settings → CI/CD → Runners → New project runner**：
-- 勾選 **Run untagged jobs**
-- 按 **Create runner**，複製產生的 `glrt-` token
-
-### 註冊
+生產環境需設定以下環境變數：
 
 ```bash
-gitlab-runner register \
-  --url https://gitlab.com \
-  --token <你自己的 glrt- token>
-# 詢問 name → 自訂（例如 local-mac）
-# 詢問 executor → shell
+DB_PATH=/path/to/production/curriculum.db
+PORT=8000
 ```
 
-### 啟動
+### Docker 部署
 
-**macOS**
-```bash
-brew services start gitlab-runner
+```dockerfile
+# Dockerfile 範例
+FROM python:3.10-slim
+WORKDIR /app
+COPY . .
+RUN pip install uv
+RUN uv sync
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-**Linux**
-```bash
-sudo gitlab-runner start
-```
+## 🤝 貢獻指南
+
+1. Fork 本專案
+2. 建立功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交變更 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 開啟 Pull Request
+
+

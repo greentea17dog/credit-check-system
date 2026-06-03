@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle2, XCircle, BookOpen, Dumbbell, FileText, GraduationCap } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { type GraduationResult as GraduationResultType } from "@/hooks/useErrorHandler"
 
 interface GraduationResultProps {
@@ -236,7 +237,12 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                       <ul className="space-y-1 text-xs max-h-48 overflow-y-auto">
                         {courses.map((c, i) => (
                           <li key={`${c.courseCode}-${i}`} className="flex justify-between gap-2 border-b border-muted-foreground/10 pb-1">
-                            <span className="truncate">{c.courseName}</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="truncate cursor-default">{c.courseName}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{c.courseName}</TooltipContent>
+                            </Tooltip>
                             <span className="text-muted-foreground shrink-0">{c.credits} 學分</span>
                           </li>
                         ))}
@@ -425,7 +431,7 @@ export default function GraduationResult({ result }: GraduationResultProps) {
         const minor = item.result
         if (!minor) return null
         const label = item.dept_name
-          ? `輔系${result.minor_details && result.minor_details.length > 1 ? `${idx + 1}` : ""}：${item.dept_name}`
+          ? `輔系${result.minor_details && result.minor_details.length > 1 ? `${idx + 1}` : ""}`
           : "輔系學分"
         return (
           <Card key={idx} className="shadow-sm">
@@ -433,6 +439,16 @@ export default function GraduationResult({ result }: GraduationResultProps) {
               <CardTitle className="flex items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-teal-100"><BookOpen className="h-4 w-4 text-teal-600" /></span>
                 {label}
+                {item.dept_name && (
+                  <span className="text-sm text-muted-foreground font-normal">
+                    - {item.dept_name}
+                  </span>
+                )}
+                {item.applicable_year && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    （{item.applicable_year} 學年度）
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
