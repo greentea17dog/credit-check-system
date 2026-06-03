@@ -573,7 +573,7 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
                         })
                         continue
             # 必修課程不在此處理，由 required.py 模組負責分析
-    
+
     # --- 處理抵免課程，將應計入選修的抵免課加入統計 ---
     waived_courses = data[0].get("課業學習", {}).get("waivedCourseList", [])
     for course in waived_courses:
@@ -581,26 +581,26 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
         course_name = normalize_name(course_name)
         credits = float(course.get("credit", "0"))
         course_type = course.get("requiredOrElectiveCourse", "")
-        
+
         # 跳過體育、國防和通識課程
         code = course.get("courseCode", "")
         if code.startswith("002") or code.startswith("003") or "體育" in course_name:
             continue
         if _is_general_education(course):
             continue
-            
+
         # 跳過已修必修課程（避免重複計算）
         if course_name in passed_required_courses:
             continue
-            
+
         # 跳過輔系課程
         if course_name in pass_minor_courses:
             continue
-            
+
         # 跳過零學分課程
         if credits <= 0:
             continue
-        
+
         # 根據課程類型判斷是否計入選修
         if course_type == "選":
             # 抵免選修課直接計入外系選修
@@ -616,7 +616,7 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
             is_in_dept = False
             if course.get("courseCode", "").startswith("703") or course.get("courseCode", "").startswith("753"):
                 is_in_dept = True
-            
+
             # 本系必修抵免不計入選修，外系必修抵免計入選修
             if not is_in_dept:
                 pass_credit_count_outdept += int(credits)
@@ -626,7 +626,7 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
                     "credits": course.get("credit", "0.0"),
                     "grade": "抵免"
                 })
-    
+
     pass_credit_count = pass_credit_count_indept + pass_credit_count_outdept
     if total_required_credits is None:
         cursor.execute("""
