@@ -3,7 +3,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle2, XCircle, BookOpen, Dumbbell, FileText, GraduationCap } from "lucide-react"
 import { type GraduationResult as GraduationResultType } from "@/hooks/useErrorHandler"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface GraduationResultProps {
   result: GraduationResultType
@@ -54,7 +53,7 @@ function CreditBlock({
 }
 
 export default function GraduationResult({ result }: GraduationResultProps) {
-  const { summary, is_eligible_to_graduate, admission_year, main_major } = result
+  const { summary, is_eligible_to_graduate } = result
 
   const missingRequired = Math.max(0, summary.required_credits_needed - summary.required_credits_earned)
   const missingGeneral = Math.max(0, summary.general_credits_needed - summary.general_credits_earned)
@@ -74,7 +73,7 @@ export default function GraduationResult({ result }: GraduationResultProps) {
       <Card className={`shadow-md border-2 overflow-hidden ${is_eligible_to_graduate ? "border-green-400" : "border-red-400"}`}>
         <div className={`py-10 px-6 ${is_eligible_to_graduate ? "bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50" : "bg-gradient-to-br from-red-50 via-rose-50 to-pink-50"}`}>
           <div className="flex flex-col items-center gap-4">
-<div className={`p-4 rounded-full ${is_eligible_to_graduate ? "bg-green-100" : "bg-red-100"}`}>
+            <div className={`p-4 rounded-full ${is_eligible_to_graduate ? "bg-green-100" : "bg-red-100"}`}>
               {is_eligible_to_graduate
                 ? <GraduationCap className="h-14 w-14 text-green-600" />
                 : <XCircle className="h-14 w-14 text-red-600" />
@@ -123,86 +122,64 @@ export default function GraduationResult({ result }: GraduationResultProps) {
             <CardTitle className="flex items-center gap-2">
               <span className="p-1.5 rounded-lg bg-blue-100"><FileText className="h-4 w-4 text-blue-600" /></span>
               必修課程
-              {result.required_courses?.main_major?.dept_name && (
-                <span className="text-sm text-muted-foreground font-normal">
-                  - {result.required_courses.main_major.dept_name}
-                </span>
-              )}
-              {result.required_courses?.main_major?.year && (
-                <span className="text-xs text-muted-foreground font-normal">
-                  （{result.required_courses.main_major.year} 學年度）
-                </span>
-              )}
             </CardTitle>
           </CardHeader>
-<CardContent className="pt-4">
+          <CardContent className="pt-4">
             <CreditBlock earned={summary.required_credits_earned} needed={summary.required_credits_needed} />
+
             {result.required_courses && (() => {
               const main = result.required_courses.main_major
-              
-              if (main) {
-                const missing = Math.max(0, main.credits_needed - main.credits_earned)
+              const dm = result.required_courses.double_major
+              const renderBlock = (
+                title: string,
+                block: NonNullable<typeof main>,
+                badgeColor: string,
+              ) => {
+                const missing = Math.max(0, block.credits_needed - block.credits_earned)
                 return (
-<>
-                    {/* 學分統計 */}
-                    <div className={`p-4 rounded-lg border ${missing === 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">已修學分</span>
-                          <span className="text-2xl font-bold">{main.credits_earned}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">需修學分</span>
-                          <span className="text-lg">{main.credits_needed}</span>
-                        </div>
-                        {missing === 0 ? (
-                          <div className="flex items-center justify-center gap-2 pt-2 border-t text-green-600">
-                            <CheckCircle2 className="h-4 w-4" />
-                            <span className="font-medium">已完成</span>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between items-center pt-2 border-t">
-                            <span className="text-red-600 font-medium">缺少學分</span>
-                            <span className="text-red-600 font-bold">{missing}</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="border rounded-xl p-4 bg-background">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badgeColor}`}>{title}</span>
+                      <span className="font-semibold text-sm">{block.dept_name}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">({block.year} 學年度)</span>
                     </div>
+                    <CreditBlock earned={block.credits_earned} needed={block.credits_needed} />
+                    <div className="mt-4 space-y-3">
+                      {block.passed.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-green-700 mb-1.5">已通過 ({block.passed.length})</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {block.passed.map((c, i) => (
+                              <span key={i} className="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {block.missing.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-red-700 mb-1.5">缺少 ({block.missing.length})</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {block.missing.map((c, i) => (
+                              <span key={i} className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
 
-                    {/* 課程明細 */}
-                    <div className="mt-6 space-y-4">
-                      {main.passed.length > 0 && (
-                        <div>
-                          <p className="text-sm font-semibold text-green-700 mb-2">✓ 已通過 ({main.passed.length})</p>
-                          <div className="flex flex-wrap gap-2">
-                            {main.passed.map((course, index) => (
-                              <span
-                                key={index}
-                                className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-                              >
-                                {course}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {main.missing.length > 0 && (
-                        <div>
-                          <p className="text-sm font-semibold text-red-700 mb-2">✗ 缺少 ({main.missing.length})</p>
-                          <div className="flex flex-wrap gap-2">
-                            {main.missing.map((course, index) => (
-                              <span
-                                key={index}
-                                className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-                              >
-                                {course}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
+              if (main) {
+                return (
+                  <div className="mt-4 space-y-3">
+                    {renderBlock("主修", main, "bg-blue-100 text-blue-800")}
+                    {dm && renderBlock("雙主修", dm, "bg-purple-100 text-purple-800")}
+                  </div>
                 )
               }
 
@@ -268,7 +245,7 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                       <p className="text-xs text-muted-foreground text-center">尚無課程</p>
                     )}
                   </div>
-                )))
+                ))}
               </div>
             )}
           </CardContent>
