@@ -27,10 +27,48 @@ def _is_passing(score: str) -> bool:
 
 # ── Session 解析 ──────────────────────────────────────────────────────────────
 
+def _collect_all_passed_courses_with_years(session_data: list) -> list[dict]:
+    """全人 JSON → [{課名, 學分, 學年度}]，含所有修別且及格的課（抵免課一律視為通過）
+    
+    返回課程列表而非字典，每個課程實例都獨立存在，包含學年度資訊。
+    """
+    passed_courses: list[dict] = []
+    kl = session_data[0]["課業學習"]
+
+    for c in kl.get("waivedCourseList", []):
+        name = c.get("courseName", "").strip()
+        credit = float(c.get("credit") or 0)
+        if name and credit > 0:
+            passed_courses.append({
+                "name": name,
+                "credit": credit,
+                "academic_year": "",
+                "type": "waived"
+            })
+
+    for yr in kl.get("gradeRecordList", []):
+        academic_year = yr.get("academicYear", "")
+        for c in yr.get("GradeRecords", []):
+            name = c.get("courseName", "").strip()
+            score = c.get("score", "")
+            credit = float(c.get("credit") or 0)
+
+            if name and _is_passing(score) and credit > 0:
+                passed_courses.append({
+                    "name": name,
+                    "credit": credit,
+                    "academic_year": academic_year,
+                    "type": "grade"
+                })
+
+    return passed_courses
+
+
 def _collect_all_passed_courses(session_data: list) -> dict[str, float]:
     """全人 JSON → {課名: 學分}，含所有修別且及格的課（抵免課一律視為通過）
 
     不同於 required.py 只收「必/群」，輔系課程可以任何修別出現在成績單。
+    相同課名不同學年度的課程會分開計算學分，不會覆蓋。
     """
     passed: dict[str, float] = {}
     kl = session_data[0]["課業學習"]
@@ -42,13 +80,17 @@ def _collect_all_passed_courses(session_data: list) -> dict[str, float]:
             passed[name] = passed.get(name, 0) + credit
 
     for yr in kl.get("gradeRecordList", []):
+        academic_year = yr.get("academicYear", "")
         for c in yr.get("GradeRecords", []):
             name = c.get("courseName", "").strip()
             score = c.get("score", "")
             credit = float(c.get("credit") or 0)
 
             if name and _is_passing(score) and credit > 0:
-                passed[name] = passed.get(name, 0) + credit
+                # 為不同學年度的相同課程建立獨立的鍵值
+                # 格式：課名_學年度，如果沒有學年度則使用原課名
+                course_key = f"{name}_{academic_year}" if academic_year else name
+                passed[course_key] = passed.get(course_key, 0) + credit
 
     return passed
 
@@ -134,15 +176,46 @@ def _flatten_elective_groups(elective_groups) -> list[dict]:
     return elective_groups or []
 
 
+def _match_course_with_years(course: dict, passed_courses_with_years: list[dict]) -> list[dict]:
+    """單一課程 × passed_courses_with_years → 實際命中的課程列表（支援不同學年度）"""
+    name = course["course_name"]
+    matched_courses = []
+    
+    for passed_course in passed_courses_with_years:
+        passed_name = passed_course["name"]
+        if (normalize_name(name) == normalize_name(passed_name) or 
+            any(normalize_name(alt) == normalize_name(passed_name) for alt in _course_alternatives(course))):
+            matched_courses.append(passed_course)
+    
+    return matched_courses
+
+
 def _match_course(course: dict, passed_courses: dict[str, float]) -> str | None:
-    """單一課程 × passed_courses → 實際命中的課名或 None（括號全半形皆可命中）"""
+    """單一課程 × passed_courses → 實際命中的課名或 None（括號全半形皆可命中）
+    
+    支援不同學年度的相同課程，會優先返回第一個匹配的課程。
+    """
     norm_to_orig = {normalize_name(k): k for k in passed_courses}
     name = course["course_name"]
+    
+    # 先檢查是否有帶學年度的課程匹配
+    for key in passed_courses:
+        # 移除學年度後綴來比較課名
+        course_name_only = key.rsplit('_', 1)[0] if '_' in key and key.split('_')[-1].isdigit() else key
+        if normalize_name(name) == normalize_name(course_name_only):
+            return key
+        # 檢查 alternatives
+        for alt in _course_alternatives(course):
+            if normalize_name(alt) == normalize_name(course_name_only):
+                return key
+    
+    # 如果沒有找到，檢查原始課名匹配（向後兼容）
     if normalize_name(name) in norm_to_orig:
         return norm_to_orig[normalize_name(name)]
     for alt in _course_alternatives(course):
         if normalize_name(alt) in norm_to_orig:
             return norm_to_orig[normalize_name(alt)]
+    
     return None
 
 
@@ -172,10 +245,19 @@ def _match_minor(
     for course in required_courses:
         name = course["course_name"]
         db_credits = _course_credits(course)
+        matched_name = _match_course(course, passed_courses)
 
-        if _match_course(course, passed_courses):
-            passed_names.append(name)
-            credits_earned += db_credits
+        if matched_name:
+            student_credit = passed_courses.get(matched_name, 0)
+            # 只有學分達到要求才視為通過
+            if student_credit >= db_credits:
+                passed_names.append(name)
+                credits_earned += student_credit
+            else:
+                # 學分不足，顯示缺少的學分數
+                missing_credits = db_credits - student_credit
+                missing_names.append(f"{name} (缺少 {missing_credits:g} 學分)")
+                credits_earned += student_credit
         else:
             missing_names.append(name)
 

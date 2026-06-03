@@ -10,6 +10,11 @@ from backend.database import get_db, normalize_name
 _PASSING_STRINGS = {"通過"}
 _FAILING_STRINGS = {"成績未到或無成績", "停修", "不及格", ""}
 
+# 只要出現在成績單即視為通過的課程（不論分數）
+_PRESENCE_COUNTS_AS_PASS: frozenset[str] = frozenset({
+    "程式能力檢定",
+})
+
 
 def _is_passing(score: str) -> bool:
     """score 字串 → 是否及格（數值 >= 60 或「通過」）"""
@@ -45,7 +50,7 @@ def _collect_passed_courses(session_data: list) -> dict:
             name = c.get("courseName", "").strip()
             score = c.get("score", "")
             credit = float(c.get("credit") or 0)
-            if name and _is_passing(score):
+            if name and (_is_passing(score) or name in _PRESENCE_COUNTS_AS_PASS):
                 passed[name] = credit
                 passed[normalize_name(name)] = credit
 
@@ -62,6 +67,21 @@ def _count_group_course_semesters(session_data: list) -> dict[str, int]:
                 continue
             name = c.get("courseName", "").strip()
             if name and _is_passing(c.get("score", "")):
+                counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def _count_compulsory_semesters(session_data: list) -> dict[str, int]:
+    """全人 JSON → {必修課名: 及格學期數}（同名課出現多次時分別計算，供展開顯示用）"""
+    counts: dict[str, int] = {}
+    kl = session_data[0]["課業學習"]
+    for yr in kl.get("gradeRecordList", []):
+        for c in yr.get("GradeRecords", []):
+            if c.get("requiredOrElectiveCourse") != "必":
+                continue
+            name = c.get("courseName", "").strip()
+            score = c.get("score", "")
+            if name and (_is_passing(score) or name in _PRESENCE_COUNTS_AS_PASS):
                 counts[name] = counts.get(name, 0) + 1
     return counts
 
@@ -149,6 +169,18 @@ _GROUP_COURSE_MAP: dict[tuple[str, str], dict[str, set[str]]] = {
 }
 
 
+# ── 群修最少門數設定 ─────────────────────────────────────────────────────────────
+# 格式：{ (系所全名, 學年度, 群組類型): 最少需通過門數 }；未設定者預設為 1
+
+_GROUP_MIN_COURSES: dict[tuple[str, str, str], int] = {
+    ("資訊科學系", "110", "群A"): 2,
+    ("資訊科學系", "111", "群A"): 2,
+    ("資訊科學系", "112", "群A"): 2,
+    ("資訊科學系", "113", "群A"): 2,
+    ("資訊科學系", "114", "群A"): 2,
+}
+
+
 # ── 必修替代對照表 ─────────────────────────────────────────────────────────────
 # 格式：{ (系所全名, 學年度): { 必修課名: {可替代的課名, ...} } }
 # 同一門替代課最多只能抵一門必修（_match_required 中 used_substitutes 追蹤）
@@ -199,12 +231,14 @@ def _match_required(
     dept_name: str = "",
     year: str = "",
     group_counts: dict = None,
+    compulsory_counts: dict = None,
 ) -> tuple:
     """必修清單 × 已修課程 → (passed_names, missing_names, credits_earned)"""
     passed_names: list[str] = []
     missing_names: list[str] = []
     credits_earned: int = 0
     group_counts = group_counts or {}
+    compulsory_counts = compulsory_counts or {}
 
     plain = [c for c in required_courses if c["type"] == "必修"]
     groups: dict[str, list] = {}
@@ -218,7 +252,8 @@ def _match_required(
     for c in plain:
         name = c["name"]
         if name in passed_courses:
-            passed_names.append(name)
+            for _ in range(compulsory_counts.get(name, 1)):
+                passed_names.append(name)
             credits_earned += c["credits"]
         else:
             available = dept_sub_map.get(name, set()) & passed_courses.keys() - used_substitutes
@@ -229,23 +264,29 @@ def _match_required(
             else:
                 missing_names.append(name)
 
-    # 群修：每組只需一門通過，課名為佔位符時查 _GROUP_COURSE_MAP
-    # group_counts 追蹤同名課修了幾學期（如資訊専題上下學期各3學分）
+    # 群修：每組需通過 _GROUP_MIN_COURSES 指定數量的課（預設 1）
+    # 課名為佔位符時查 _GROUP_COURSE_MAP；group_counts 追蹤同名課修了幾學期
     dept_group_map = _GROUP_COURSE_MAP.get((dept_name, year), {})
     for group_type, courses in sorted(groups.items()):
+        min_count = _GROUP_MIN_COURSES.get((dept_name, year, group_type), 1)
         matched = [c for c in courses if c["name"] in passed_courses]
         if not matched:
             aliases = dept_group_map.get(group_type, set())
             if aliases & passed_courses.keys():
                 matched = [courses[0]]
-        if matched:
-            course_name = matched[0]["name"]
-            unit = matched[0]["credits"]
+        fulfilled = matched[:min_count]
+        fulfilled_names = {m["name"] for m in fulfilled}
+        for m in fulfilled:
+            course_name = m["name"]
+            unit = m["credits"]
             semesters = group_counts.get(course_name, 1)
             passed_names.append(course_name)
             credits_earned += unit * semesters
-        else:
-            missing_names.append(courses[0]["name"])
+        shortfall = min_count - len(fulfilled)
+        if shortfall > 0:
+            unmatched = [c for c in courses if c["name"] not in fulfilled_names]
+            for i in range(shortfall):
+                missing_names.append(unmatched[i]["name"] if i < len(unmatched) else courses[0]["name"])
 
     return passed_names, missing_names, credits_earned
 
@@ -269,6 +310,7 @@ def analyze_required(
     try:
         passed_courses = _collect_passed_courses(session_data)
         group_counts = _count_group_course_semesters(session_data)
+        compulsory_counts = _count_compulsory_semesters(session_data)
 
         dept = _get_dept_row(conn, dept_name, year)
         if dept is None:
@@ -276,7 +318,7 @@ def analyze_required(
 
         required = _get_required_courses(conn, dept["id"])
         main_passed, main_missing, main_credits_earned = _match_required(
-            required, passed_courses, dept_name, year, group_counts
+            required, passed_courses, dept_name, year, group_counts, compulsory_counts
         )
         main_credits_needed = dept["compulsory_credits_required"]
 
@@ -303,7 +345,7 @@ def analyze_required(
             if double_major_dept is not None:
                 double_major_required = _get_required_courses(conn, double_major_dept["id"])
                 dm_passed, dm_missing, dm_credits_earned = _match_required(
-                    double_major_required, passed_courses, double_major_dept_name, double_major_year, group_counts
+                    double_major_required, passed_courses, double_major_dept_name, double_major_year, group_counts, compulsory_counts
                 )
                 dm_credits_needed = double_major_dept["compulsory_credits_required"]
 

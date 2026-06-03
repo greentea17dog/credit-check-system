@@ -3,13 +3,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle2, XCircle, BookOpen, Dumbbell, FileText } from "lucide-react"
 import { type GraduationResult as GraduationResultType } from "@/hooks/useErrorHandler"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface GraduationResultProps {
   result: GraduationResultType
 }
 
 export default function GraduationResult({ result }: GraduationResultProps) {
-  const { summary, is_eligible_to_graduate } = result
+  const { summary, is_eligible_to_graduate, admission_year, main_major } = result
 
   // 計算各項缺少的學分
   const missingRequired = Math.max(0, summary.required_credits_needed - summary.required_credits_earned)
@@ -27,17 +28,33 @@ export default function GraduationResult({ result }: GraduationResultProps) {
               <>
                 <CheckCircle2 className="h-16 w-16 text-green-600" />
                 <h2 className="text-3xl font-bold text-green-700">恭喜！符合畢業資格</h2>
-                <p className="text-green-600">
-                  {result.dept_name} - {result.applicable_year}學年度
-                </p>
+                <div className="text-center space-y-1">
+                  <p className="text-green-600 font-medium">
+                    {main_major?.dept_name || result.dept_name}
+                  </p>
+                  <p className="text-green-600 text-sm">
+                    入學 {admission_year} 學年度
+                  </p>
+                  <p className="text-green-600 text-xs">
+                    適用 {result.applicable_year} 學年度課程規則
+                  </p>
+                </div>
               </>
             ) : (
               <>
                 <XCircle className="h-16 w-16 text-red-600" />
                 <h2 className="text-3xl font-bold text-red-700">尚未符合畢業資格</h2>
-                <p className="text-red-600">
-                  {result.dept_name} - {result.applicable_year}學年度
-                </p>
+                <div className="text-center space-y-1">
+                  <p className="text-red-600 font-medium">
+                    {main_major?.dept_name || result.dept_name}
+                  </p>
+                  <p className="text-red-600 text-sm">
+                    入學 {admission_year} 學年度
+                  </p>
+                  <p className="text-red-600 text-xs">
+                    適用 {result.applicable_year} 學年度課程規則
+                  </p>
+                </div>
               </>
             )}
           </div>
@@ -87,101 +104,87 @@ export default function GraduationResult({ result }: GraduationResultProps) {
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               必修課程
+              {result.required_courses?.main_major?.dept_name && (
+                <span className="text-sm text-muted-foreground font-normal">
+                  - {result.required_courses.main_major.dept_name}
+                </span>
+              )}
+              {result.required_courses?.main_major?.year && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  （{result.required_courses.main_major.year} 學年度）
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`p-4 rounded-lg border ${missingRequired === 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">已修學分</span>
-                  <span className="text-2xl font-bold">{summary.required_credits_earned}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">需修學分</span>
-                  <span className="text-lg">{summary.required_credits_needed}</span>
-                </div>
-                {missingRequired > 0 ? (
-                  <div className="flex justify-between items-center pt-2 border-t">
-                    <span className="text-red-600 font-medium">缺少學分</span>
-                    <span className="text-red-600 font-bold">{missingRequired}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2 pt-2 border-t text-green-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="font-medium">已完成</span>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* 必修課程列表（優先顯示主修/雙主修分項） */}
+            {/* 必修課程列表（只顯示主修） */}
             {result.required_courses && (() => {
               const main = result.required_courses.main_major
-              const dm = result.required_courses.double_major
-              const renderBlock = (
-                title: string,
-                block: NonNullable<typeof main>,
-                badgeColor: string,
-              ) => {
-                const missing = Math.max(0, block.credits_needed - block.credits_earned)
+              
+              if (main) {
+                const missing = Math.max(0, main.credits_needed - main.credits_earned)
                 return (
-                  <div className="border rounded-lg p-4 bg-background">
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${badgeColor}`}>
-                          {title}
-                        </span>
-                        <span className="font-semibold">{block.dept_name}</span>
-                        <span className="text-xs text-muted-foreground">（{block.year} 學年度）</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-bold text-lg">{block.credits_earned}</span>
-                        <span className="text-muted-foreground"> / {block.credits_needed} 學分</span>
-                        {missing > 0 ? (
-                          <span className="ml-2 text-red-600 font-medium">缺 {missing}</span>
+                  <>
+                    {/* 學分統計 */}
+                    <div className={`p-4 rounded-lg border ${missing === 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">已修學分</span>
+                          <span className="text-2xl font-bold">{main.credits_earned}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">需修學分</span>
+                          <span className="text-lg">{main.credits_needed}</span>
+                        </div>
+                        {missing === 0 ? (
+                          <div className="flex items-center justify-center gap-2 pt-2 border-t text-green-600">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="font-medium">已完成</span>
+                          </div>
                         ) : (
-                          <span className="ml-2 text-green-600 font-medium">已達標</span>
+                          <div className="flex justify-between items-center pt-2 border-t">
+                            <span className="text-red-600 font-medium">缺少學分</span>
+                            <span className="text-red-600 font-bold">{missing}</span>
+                          </div>
                         )}
                       </div>
                     </div>
-                    {block.passed.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-xs font-semibold text-green-700 mb-1">
-                          ✓ 已通過 ({block.passed.length})
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {block.passed.map((c, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {block.missing.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-red-700 mb-1">
-                          ✗ 缺少 ({block.missing.length})
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {block.missing.map((c, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              }
 
-              if (main) {
-                return (
-                  <div className="mt-6 space-y-3">
-                    {renderBlock("主修", main, "bg-blue-100 text-blue-800")}
-                    {dm && renderBlock("雙主修", dm, "bg-purple-100 text-purple-800")}
-                  </div>
+                    {/* 課程明細 */}
+                    <div className="mt-6 space-y-4">
+                      {main.passed.length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold text-green-700 mb-2">✓ 已通過 ({main.passed.length})</p>
+                          <div className="flex flex-wrap gap-2">
+                            {main.passed.map((course, index) => (
+                              <span
+                                key={index}
+                                className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
+                              >
+                                {course}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {main.missing.length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold text-red-700 mb-2">✗ 缺少 ({main.missing.length})</p>
+                          <div className="flex flex-wrap gap-2">
+                            {main.missing.map((course, index) => (
+                              <span
+                                key={index}
+                                className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                              >
+                                {course}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )
               }
 
@@ -224,27 +227,37 @@ export default function GraduationResult({ result }: GraduationResultProps) {
           </CardContent>
         </Card>
 
-        {/* 輔系學分 */}
-        {result.minor && (
-          <Card className="md:row-span-2">
+        {/* 雙主修學分 */}
+        {result.double_major && (
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
-                輔系學分
+                雙主修學分
+                {result.double_major.dept_name && (
+                  <span className="text-sm text-muted-foreground font-normal">
+                    - {result.double_major.dept_name}
+                  </span>
+                )}
+                {result.double_major.application_year && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    （{result.double_major.application_year} 學年度申請）
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`p-4 rounded-lg border ${result.minor.credits_earned >= result.minor.credits_needed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+              <div className={`p-4 rounded-lg border ${result.double_major.credits_earned >= result.double_major.credits_needed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">已修學分</span>
-                    <span className="text-2xl font-bold">{result.minor.credits_earned}</span>
+                    <span className="text-2xl font-bold">{result.double_major.credits_earned}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">需修學分</span>
-                    <span className="text-lg">{result.minor.credits_needed}</span>
+                    <span className="text-lg">{result.double_major.credits_needed}</span>
                   </div>
-                  {result.minor.credits_earned >= result.minor.credits_needed ? (
+                  {result.double_major.credits_earned >= result.double_major.credits_needed ? (
                     <div className="flex items-center justify-center gap-2 pt-2 border-t text-green-600">
                       <CheckCircle2 className="h-4 w-4" />
                       <span className="font-medium">已完成</span>
@@ -252,18 +265,18 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                   ) : (
                     <div className="flex justify-between items-center pt-2 border-t">
                       <span className="text-red-600 font-medium">缺少學分</span>
-                      <span className="text-red-600 font-bold">{result.minor.credits_needed - result.minor.credits_earned}</span>
+                      <span className="text-red-600 font-bold">{result.double_major.credits_needed - result.double_major.credits_earned}</span>
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="mt-6 space-y-4">
-                {result.minor.passed.length > 0 && (
+                {result.double_major.passed.length > 0 && (
                   <div>
-                    <p className="text-sm font-semibold text-green-700 mb-2">✓ 已通過 ({result.minor.passed.length})</p>
+                    <p className="text-sm font-semibold text-green-700 mb-2">✓ 已通過 ({result.double_major.passed.length})</p>
                     <div className="flex flex-wrap gap-2">
-                      {result.minor.passed.map((course, index) => (
+                      {result.double_major.passed.map((course, index) => (
                         <span
                           key={index}
                           className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
@@ -274,11 +287,11 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                     </div>
                   </div>
                 )}
-                {result.minor.missing.length > 0 && (
+                {result.double_major.missing.length > 0 && (
                   <div>
-                    <p className="text-sm font-semibold text-red-700 mb-2">✗ 缺少 ({result.minor.missing.length})</p>
+                    <p className="text-sm font-semibold text-red-700 mb-2">✗ 缺少 ({result.double_major.missing.length})</p>
                     <div className="flex flex-wrap gap-2">
-                      {result.minor.missing.map((course, index) => (
+                      {result.double_major.missing.map((course, index) => (
                         <span
                           key={index}
                           className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
@@ -293,6 +306,89 @@ export default function GraduationResult({ result }: GraduationResultProps) {
             </CardContent>
           </Card>
         )}
+
+        {/* 輔系學分 */}
+        {(result.minor_details?.filter(m => m.result).length
+          ? result.minor_details.filter(m => m.result)
+          : result.minor ? [{ dept_name: result.minor.dept_name, applicable_year: result.minor.application_year, result: result.minor }] : []
+        ).map((minorEntry, idx) => (
+          <Card key={idx}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                輔系學分
+                {minorEntry.dept_name && (
+                  <span className="text-sm text-muted-foreground font-normal">
+                    - {minorEntry.dept_name}
+                  </span>
+                )}
+                {minorEntry.applicable_year && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    （{minorEntry.applicable_year} 學年度申請）
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`p-4 rounded-lg border ${minorEntry.result.credits_earned >= minorEntry.result.credits_needed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">已修學分</span>
+                    <span className="text-2xl font-bold">{minorEntry.result.credits_earned}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">需修學分</span>
+                    <span className="text-lg">{minorEntry.result.credits_needed}</span>
+                  </div>
+                  {minorEntry.result.credits_earned >= minorEntry.result.credits_needed ? (
+                    <div className="flex items-center justify-center gap-2 pt-2 border-t text-green-600">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="font-medium">已完成</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <span className="text-red-600 font-medium">缺少學分</span>
+                      <span className="text-red-600 font-bold">{minorEntry.result.credits_needed - minorEntry.result.credits_earned}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {minorEntry.result.passed.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-green-700 mb-2">✓ 已通過 ({minorEntry.result.passed.length})</p>
+                    <div className="flex flex-wrap gap-2">
+                      {minorEntry.result.passed.map((course: string, index: number) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
+                        >
+                          {course}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {minorEntry.result.missing.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-red-700 mb-2">✗ 缺少 ({minorEntry.result.missing.length})</p>
+                    <div className="flex flex-wrap gap-2">
+                      {minorEntry.result.missing.map((course: string, index: number) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                        >
+                          {course}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
         {/* 選修學分 */}
         <Card>
@@ -340,7 +436,14 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                     <ul className="mt-2 space-y-1 text-xs max-h-48 overflow-y-auto">
                       {result.elective.in_dept_courses.map((c, i) => (
                         <li key={`${c.courseCode}-${i}`} className="flex justify-between gap-2 border-b border-muted-foreground/10 pb-1">
-                          <span className="truncate">{c.courseName}</span>
+                          <Tooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <span className="truncate cursor-help">{c.courseName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent sideOffset={4}>
+                              <p>{c.courseName}</p>
+                            </TooltipContent>
+                          </Tooltip>
                           <span className="text-muted-foreground shrink-0">{c.credits} 學分</span>
                         </li>
                       ))}
@@ -359,7 +462,14 @@ export default function GraduationResult({ result }: GraduationResultProps) {
                     <ul className="mt-2 space-y-1 text-xs max-h-48 overflow-y-auto">
                       {result.elective.out_dept_courses.map((c, i) => (
                         <li key={`${c.courseCode}-${i}`} className="flex justify-between gap-2 border-b border-muted-foreground/10 pb-1">
-                          <span className="truncate">{c.courseName}</span>
+                          <Tooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <span className="truncate cursor-help">{c.courseName}</span>
+                            </TooltipTrigger>
+                            <TooltipContent sideOffset={4}>
+                              <p>{c.courseName}</p>
+                            </TooltipContent>
+                          </Tooltip>
                           <span className="text-muted-foreground shrink-0">{c.credits} 學分</span>
                         </li>
                       ))}

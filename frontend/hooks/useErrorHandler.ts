@@ -6,6 +6,11 @@ export type ErrorType = "format" | "server" | "network" | "unknown" | ""
 export interface GraduationResult {
   dept_name: string
   applicable_year: string
+  admission_year: string
+  main_major: {
+    dept_name: string
+    admission_year: string
+  }
   summary: {
     total_credits_earned: number
     required_credits_earned: number
@@ -110,6 +115,21 @@ export interface GraduationResult {
     missing: string[]
     credits_earned: number
     credits_needed: number
+    dept_name?: string
+    application_year?: string
+  }
+  minor_details?: Array<{
+    dept_name: string
+    applicable_year: string
+    result: any
+  }>
+  double_major?: {
+    passed: string[]
+    missing: string[]
+    credits_earned: number
+    credits_needed: number
+    dept_name?: string
+    application_year?: string
   }
   is_eligible_to_graduate: boolean
 }

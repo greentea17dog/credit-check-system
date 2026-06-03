@@ -159,6 +159,17 @@ def analyze(payload: AnalyzeRequest):
                 "result": minor_result,
             })
         minor = minor_results[0]["result"] if minor_results else None
+        # 為 minor 加入申請系所和年份資訊
+        if minor and minor_results:
+            minor["dept_name"] = minor_results[0]["dept_name"]
+            minor["application_year"] = minor_results[0]["applicable_year"]
+        
+        # 提取雙主修資訊 - 從 required_courses.double_major 取得
+        double_major = None
+        if required.get("double_major"):
+            double_major = required["double_major"]
+            # 直接設定申請年度為雙主修的適用學年度
+            double_major["application_year"] = double_major.get("year")
     finally:
         conn.close()
 
@@ -187,6 +198,11 @@ def analyze(payload: AnalyzeRequest):
     return {
         "dept_name": dept_name,
         "applicable_year": year,
+        "admission_year": year,
+        "main_major": {
+            "dept_name": dept_name,
+            "admission_year": year
+        },
         "summary": {
             "total_credits_earned": total_credits_earned,
             "required_credits_earned": required_credits_earned,
@@ -210,6 +226,7 @@ def analyze(payload: AnalyzeRequest):
         "waiver": waiver,
         "minor": minor,
         "minor_details": minor_results,
+        "double_major": double_major,
         "is_eligible_to_graduate": is_eligible_to_graduate,
     }
 

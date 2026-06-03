@@ -1,5 +1,10 @@
 from backend.database import get_db
+from backend.minor import analyze_minor
 import re
+
+
+def normalize_name(name: str) -> str:
+    return name.replace("（", "(").replace("）", ")")
 
 def get_required_courses(dept_name: str, year: str) -> list:
     conn = get_db()
@@ -179,12 +184,15 @@ def analyze_pe(session_data, dept_name, year):
 
 def analyze_elective(session_data, dept_name, year, total_required_credits=None):
     data = session_data
-
+    conn = get_db()
     getminor1 = data[0].get("課業學習", {}).get("aboutMe", {}).get("minor1", "")
     getminor2 = data[0].get("課業學習", {}).get("aboutMe", {}).get("minor2", "")
+    pass_minor_courses = set()
     if len(getminor1) > 0:
         minor1_year = re.findall(r"[（(](\d+)[）)]", getminor1)[0]
         minor1 = re.findall(r"[\u4e00-\u9fff]+", getminor1)[0]
+        minor_analysis = analyze_minor(session_data, minor1, minor1_year, conn)
+        pass_minor_courses = set(normalize_name(name) for name in minor_analysis.get("passed", []))
     else:
         minor1_year = None
         minor1 = None
@@ -192,6 +200,8 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
     if len(getminor2) > 0:
         minor2_year = re.findall(r"[（(](\d+)[）)]", getminor2)[0]
         minor2 = re.findall(r"[\u4e00-\u9fff]+", getminor2)[0]
+        minor_analysis = analyze_minor(session_data, minor2, minor2_year, conn)
+        pass_minor_courses = pass_minor_courses.union(set(normalize_name(name) for name in minor_analysis.get("passed", [])))
 
     else:
         minor2_year = None
@@ -207,10 +217,11 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
         double_major_need = 0
         if required_analysis["double_major"] is not None:
             double_major_need = required_analysis["double_major"]["credits_needed"]
-        # 收集所有已通過的必修課程名稱（含雙主修）
-        passed_required_courses = set(required_analysis.get("passed", []))
+        # 收集所有已通過的必修課程名稱（含雙主修），並正規化以匹配選修課程
+        passed_required_courses = set(normalize_name(name) for name in required_analysis.get("passed", []))
     finally:
         conn.close()
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -266,6 +277,12 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
                   continue
             if("資訊專題" in course.get("courseName","")):
                 continue
+            course_name = course.get("courseName", "")
+            course_name = normalize_name(course_name)
+            if course_name in passed_required_courses:
+                        continue  # 已在必修區域計算，跳過
+            if course_name in pass_minor_courses:
+                        continue  # 已在輔系區域計算，跳過
             if(course.get("score", "") == "通過"):
                     getpass = 1
             #處理資訊系群修的課
@@ -413,8 +430,6 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
                 if (getpass or float(course.get("score", "")) >= 60.0):
                     # 檢查是否為已修的必修課程（含雙主修），避免重複計算
                     course_name = course.get("courseName", "")
-                    if course_name in passed_required_courses:
-                        continue  # 已在必修區域計算，跳過
                     if(course.get("courseCode","").startswith("703")or course.get("courseCode","").startswith("753")):
                         if(year == "110" or year == "111"):
                             if course.get("courseName","") in old_group_B:
@@ -557,20 +572,7 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
                             "grade": course.get("score", "")
                         })
                         continue
-            #處理必修別的課
-            if classcategory =="必":
-                    if (getpass or float(course.get("score", "")) >= 60.0):
-                        # 檢查是否為已修的必修課程（含雙主修），避免重複計算
-                        course_name = course.get("courseName", "")
-                        if course_name in passed_required_courses:
-                            continue  # 已在必修區域計算，跳過
-                        pass_credit_count_outdept += int(float(course.get("credit", "0.0")))
-                        out_ele_classes.append({
-                           "courseCode": course.get("courseCode", ""),
-                           "courseName": course.get("courseName", ""),
-                           "credits": course.get("credit", "0.0"),
-                           "grade": course.get("score", "")
-                        })
+            # 必修課程不在此處理，由 required.py 模組負責分析
     pass_credit_count = pass_credit_count_indept + pass_credit_count_outdept
     if total_required_credits is None:
         cursor.execute("""
@@ -608,3 +610,5 @@ def analyze_elective(session_data, dept_name, year, total_required_credits=None)
         "in_dept_courses": in_ele_classes,
         "out_dept_courses": out_ele_classes,
     }
+
+
