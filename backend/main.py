@@ -163,7 +163,6 @@ def analyze(payload: AnalyzeRequest):
         if minor and minor_results:
             minor["dept_name"] = minor_results[0]["dept_name"]
             minor["application_year"] = minor_results[0]["applicable_year"]
-        
         # 提取雙主修資訊 - 從 required_courses.double_major 取得
         double_major = None
         if required.get("double_major"):
