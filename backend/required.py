@@ -13,6 +13,8 @@ _FAILING_STRINGS = {"成績未到或無成績", "停修", "不及格", ""}
 # 只要出現在成績單即視為通過的課程（不論分數）
 _PRESENCE_COUNTS_AS_PASS: frozenset[str] = frozenset({
     "程式能力檢定",
+    "計算機程式設計實習（一）",
+    "計算機程式設計實習（二）",
 })
 
 
