@@ -6,11 +6,6 @@ export type ErrorType = "format" | "server" | "network" | "unknown" | ""
 export interface GraduationResult {
   dept_name: string
   applicable_year: string
-  admission_year: string
-  main_major: {
-    dept_name: string
-    admission_year: string
-  }
   summary: {
     total_credits_earned: number
     required_credits_earned: number
@@ -115,22 +110,17 @@ export interface GraduationResult {
     missing: string[]
     credits_earned: number
     credits_needed: number
-    dept_name?: string
-    application_year?: string
   }
   minor_details?: Array<{
     dept_name: string
     applicable_year: string
-    result: any
+    result: {
+      passed: string[]
+      missing: string[]
+      credits_earned: number
+      credits_needed: number
+    } | null
   }>
-  double_major?: {
-    passed: string[]
-    missing: string[]
-    credits_earned: number
-    credits_needed: number
-    dept_name?: string
-    application_year?: string
-  }
   is_eligible_to_graduate: boolean
 }
 
@@ -157,7 +147,8 @@ export function useErrorHandler() {
 
     try {
       const payload = { role, data: parsed }
-      const res = await axios.post("http://127.0.0.1:8000/api/v1/analyze", payload, {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
+      const res = await axios.post(`${backendUrl}/api/v1/analyze`, payload, {
         timeout: 30000,
       })
       setResult(res.data)
