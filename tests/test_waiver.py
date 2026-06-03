@@ -199,8 +199,8 @@ class TestGeneralWaiver:
         assert "大學英文（二）" in waived_names
 
     def test_credits_earned(self, result):
-        """含抵免的總通識學分應為 26"""
-        assert result["credits_earned"] == 26.0
+        """含抵免的總通識學分應為 27（人文學通識 2 學分使人文領域達上限 7）"""
+        assert result["credits_earned"] == 27.0
 
 
 # ── analyze_waiver 彙整模組測試 ──────────────────────────────────────────────
