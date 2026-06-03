@@ -42,8 +42,10 @@ def _collect_passed_courses(session_data: list) -> dict:
         name = c.get("courseName", "").strip()
         credit = float(c.get("credit") or 0)
         if name:
-            passed[name] = credit
-            passed[normalize_name(name)] = credit
+            passed[name] = passed.get(name, 0) + credit
+            norm = normalize_name(name)
+            if norm != name:
+                passed[norm] = passed.get(norm, 0) + credit
 
     for yr in kl.get("gradeRecordList", []):
         for c in yr.get("GradeRecords", []):
@@ -53,8 +55,10 @@ def _collect_passed_courses(session_data: list) -> dict:
             score = c.get("score", "")
             credit = float(c.get("credit") or 0)
             if name and (_is_passing(score) or name in _PRESENCE_COUNTS_AS_PASS):
-                passed[name] = credit
-                passed[normalize_name(name)] = credit
+                passed[name] = passed.get(name, 0) + credit
+                norm = normalize_name(name)
+                if norm != name:
+                    passed[norm] = passed.get(norm, 0) + credit
 
     return passed
 
@@ -254,9 +258,17 @@ def _match_required(
     for c in plain:
         name = c["name"]
         if name in passed_courses:
-            for _ in range(compulsory_counts.get(name, 1)):
-                passed_names.append(name)
-            credits_earned += c["credits"]
+            actual = passed_courses[name]
+            required = c["credits"]
+            if actual >= required:
+                for _ in range(compulsory_counts.get(name, 1)):
+                    passed_names.append(name)
+                credits_earned += required
+            else:
+                credits_earned += actual
+                remaining = required - actual
+                label = int(remaining) if remaining == int(remaining) else remaining
+                missing_names.append(f"{name}（缺少 {label} 學分）")
         else:
             available = dept_sub_map.get(name, set()) & passed_courses.keys() - used_substitutes
             if available:
